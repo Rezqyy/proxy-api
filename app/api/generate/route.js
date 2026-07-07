@@ -1,26 +1,34 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Mengambil API Key dari Environment Variables Vercel (Aman dari klien!)
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+// Konfigurasi Header CORS agar tidak diblokir oleh Expo Web / Browser
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// Fungsi OPTIONS wajib ada untuk menangani Preflight Request dari CORS
+export async function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
+}
 
 export async function POST(request) {
   try {
-    // Menerima data JSON dari aplikasi Expo
+    // 1. Cek apakah API Key terbaca oleh Vercel
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY belum terpasang atau terbaca di Vercel!");
+    }
+
+    // Inisialisasi AI di dalam blok try-catch
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+
+    // 2. Tangkap data dari Expo
     const body = await request.json();
     const { prompt, image } = body;
 
-    if (!prompt && !image) {
-      return new Response(
-        JSON.stringify({ error: 'Prompt atau gambar tidak boleh kosong' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
     let contents = prompt;
 
-    // Jika Expo mengirimkan data gambar base64, siapkan format multimodal
     if (image && image.inlineData) {
       contents = [
         { text: prompt || 'Tolong analisis gambar ini.' },
@@ -28,22 +36,25 @@ export async function POST(request) {
       ];
     }
 
-    // Memanggil model Gemini (sesuai kode aslimu: gemini-2.5-flash)
+    // 3. Tembak ke Gemini API
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
     });
 
-    // Mengembalikan jawaban teks ke aplikasi Expo
+    // 4. Kembalikan hasil sukses dengan header CORS
     return new Response(JSON.stringify({ text: result.text }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
+
   } catch (error) {
-    console.error('Gemini API Error:', error);
+    // Tampilkan error asli di log Vercel agar mudah dilacak
+    console.error('SERVER ERROR LOG:', error.message);
+    
     return new Response(
-      JSON.stringify({ error: 'Terjadi kesalahan pada server proxy.' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: `Kesalahan Server: ${error.message}` }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   }
 }
