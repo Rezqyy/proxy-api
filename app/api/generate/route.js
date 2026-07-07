@@ -32,7 +32,7 @@ export async function POST(request) {
 
     // Tembak ke Gemini API dengan membawa seluruh riwayat obrolan
     const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.1-flash-lite',
       contents: contents, // Array ini sekarang berisi chat dari awal sampai yang paling baru
     });
 
