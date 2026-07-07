@@ -1,36 +1,49 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
+
+// Mengambil API Key dari Environment Variables Vercel (Aman dari klien!)
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
 
 export async function POST(request) {
   try {
-    // Menangkap prompt yang dikirim dari aplikasi Expo
+    // Menerima data JSON dari aplikasi Expo
     const body = await request.json();
-    const { prompt } = body;
+    const { prompt, image } = body;
 
-    if (!prompt) {
-      return new Response(JSON.stringify({ error: "Prompt tidak boleh kosong" }), { status: 400 });
+    if (!prompt && !image) {
+      return new Response(
+        JSON.stringify({ error: 'Prompt atau gambar tidak boleh kosong' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Mengambil API Key dari Vercel Environment Variables (Aman dari sisi klien)
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    
-    // Inisialisasi model (gunakan gemini-1.5-flash untuk kecepatan hackathon)
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    let contents = prompt;
 
-    // Meminta respons dari Gemini
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    // Jika Expo mengirimkan data gambar base64, siapkan format multimodal
+    if (image && image.inlineData) {
+      contents = [
+        { text: prompt || 'Tolong analisis gambar ini.' },
+        { inlineData: image.inlineData },
+      ];
+    }
 
-    // Mengembalikan hasil ke aplikasi Expo
-    return new Response(JSON.stringify({ text: responseText }), {
+    // Memanggil model Gemini (sesuai kode aslimu: gemini-2.5-flash)
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: contents,
+    });
+
+    // Mengembalikan jawaban teks ke aplikasi Expo
+    return new Response(JSON.stringify({ text: result.text }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-    
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    return new Response(JSON.stringify({ error: "Terjadi kesalahan pada server" }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    console.error('Gemini API Error:', error);
+    return new Response(
+      JSON.stringify({ error: 'Terjadi kesalahan pada server proxy.' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 }
